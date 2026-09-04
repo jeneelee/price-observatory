@@ -1,14 +1,14 @@
-name: Merge Product Image
+name: Rehost Product Image
 
 on:
   workflow_dispatch:
     inputs:
       image_url:
-        description: "Adpick product image URL"
+        description: "Original product image URL"
         required: true
         type: string
       file_name:
-        description: "Output file name"
+        description: "Output file name without extension"
         required: true
         type: string
 
@@ -16,7 +16,7 @@ permissions:
   contents: write
 
 jobs:
-  merge:
+  rehost:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,58 +28,37 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y imagemagick
 
-      - name: Download product image
+      - name: Download original product image
         env:
           IMAGE_URL: ${{ inputs.image_url }}
         run: |
-          curl -L --fail --retry 3 \
-            -A "Mozilla/5.0" \
-            "$IMAGE_URL" \
-            -o product_image
+          mkdir -p generated
 
-      - name: Create final image
+          curl -L \
+            --fail \
+            --retry 3 \
+            --retry-delay 2 \
+            -A "Mozilla/5.0" \
+            -e "https://www.google.com/" \
+            "$IMAGE_URL" \
+            -o original_image
+
+      - name: Validate downloaded image
+        run: |
+          file original_image
+          identify original_image
+
+      - name: Convert image for Meta
         env:
           FILE_NAME: ${{ inputs.file_name }}
         run: |
-          mkdir -p generated
-
-          # 상품사진: 비율 유지 + 확대 허용 + 흰 배경
-          convert product_image \
-            -auto-orient \
-            -resize "980x980" \
-            -background white \
-            -gravity center \
-            -extent 1080x1080 \
-            -alpha remove \
-            -alpha off \
-            product_ready.jpg
-
-          # 애드픽 고지: 투명영역 흰색 + 폭 760px
-          convert adpicksponser_03.png \
+          convert original_image \
             -auto-orient \
             -background white \
-            -alpha background \
-            -resize "760x" \
             -alpha remove \
             -alpha off \
-            notice_small.jpg
-
-          # 1080px 폭의 작은 고지영역 생성
-          convert \
-            -size 1080x170 xc:white \
-            notice_small.jpg \
-            -gravity center \
-            -composite \
-            notice_ready.jpg
-
-          # 상품사진 + 하단 고지
-          convert \
-            product_ready.jpg \
-            notice_ready.jpg \
-            -append \
-            -background white \
-            -alpha remove \
-            -alpha off \
+            -strip \
+            -quality 92 \
             "generated/${FILE_NAME}.jpg"
 
       - name: Commit generated image
@@ -94,6 +73,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
-            git commit -m "Generate ${FILE_NAME}"
+            git commit -m "Rehost ${FILE_NAME}"
             git push
           fi

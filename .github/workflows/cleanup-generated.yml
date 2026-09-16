@@ -1,0 +1,47 @@
+name: Cleanup generated images
+
+on:
+  schedule:
+    # 매일 한국시간 오전 4시 실행 (UTC 19:00)
+    - cron: "0 19 * * *"
+
+  # 필요할 때 Actions에서 수동 실행 가능
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Delete images older than 7 days
+        run: |
+          echo "Deleting generated images older than 7 days..."
+
+          if [ -d "generated" ]; then
+            find generated \
+              -type f \
+              -name "price_*.jpg" \
+              -mtime +7 \
+              -print \
+              -delete
+          fi
+
+      - name: Commit deleted files
+        run: |
+          if git diff --quiet; then
+            echo "No old images to delete."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A generated/
+          git commit -m "Cleanup generated images older than 7 days"
+          git push
